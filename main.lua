@@ -1,7 +1,3 @@
------------------------------------------------------------------------------------------
---
--- main.lua for CrummZi inspired by Chuzzle
---
------------------------------------------------------------------------------------------
+local composer = require( "composer" );
 
--- Ryan Ziolkowski and Jonathan Crummy, 3/11/2020, CSCE 330
+composer.gotoScene("mainMenu", {effect="fade",time=500});
