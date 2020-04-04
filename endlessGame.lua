@@ -1,13 +1,64 @@
 local composer = require( "composer" );
 local scene = composer.newScene();
 local myParams, sceneGroup;
+local size, colors
 
 -- "scene:create()"
 function scene:create( event )
 	sceneGroup = self.view; -- The display group
 	myParams = event.params
+	size = myParams.size
+	numColor = myParams.colors
 
-	
+	xx = display.contentWidth
+	yy = display.contentHeight
+
+	titleTxt = display.newText(sceneGroup, "Endless mode!", xx/2, 100)
+	titleTxt.size = 75
+
+	scoreTitle = display.newText(sceneGroup, "Score:", xx/2 - 50, 175)
+
+	scoreVal = display.newText(sceneGroup, "0", xx/2 + 50, 175)
+
+	objectGrid = {}
+
+	if numColor == 5 then
+		colors = {"red","blue","green","yellow","purple"}
+	elseif numColor == 6 then
+		colors = {"red","blue","green","yellow","purple", "gray"}
+	else --colors == 7
+		colors = {"red","blue","green","yellow","purple", "gray", "white"}
+	end
+
+	for r=1,size do
+		objectGrid[r] = {}
+		for c=1,size do
+			objectGrid[r][c] = display.newCircle(sceneGroup,(xx/size)*r, 200 + ((yy/size) - 100)*c, 50)
+			objectGrid[r][c].anchorX = 1
+			tempColor = colors[math.random(1,numColor)]
+			objectGrid[r][c].color = tempColor
+
+			if tempColor == "red" then
+				objectGrid[r][c]:setFillColor(1,0,0)
+			elseif tempColor == "blue" then
+				objectGrid[r][c]:setFillColor(0,1,0)
+			elseif tempColor == "green" then
+				objectGrid[r][c]:setFillColor(0,0,1)
+			elseif tempColor == "yellow" then
+				objectGrid[r][c]:setFillColor(0.9,0.9,0.2)
+			elseif tempColor == "purple" then
+				objectGrid[r][c]:setFillColor(0.5,0.2,0.9)
+			elseif tempColor == "gray" then
+				objectGrid[r][c]:setFillColor(0.5,0.5,0.5)
+			else --temeColor == "white"
+				objectGrid[r][c]:setFillColor(1,1,1)
+			end
+
+			objectGrid[r][c].row = r
+			objectGrid[r][c].col = c
+		end
+	end
+
 end
 
 -- "scene:show()"
