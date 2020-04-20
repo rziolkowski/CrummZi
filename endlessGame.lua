@@ -33,16 +33,17 @@ function scene:create( event )
 	for r=1,size do
 		objectGrid[r] = {}
 		for c=1,size do
-			objectGrid[r][c] = display.newCircle(sceneGroup,(xx/size)*r, 200 + ((yy/size) - 100)*c, 50)
+			objectGrid[r][c] = display.newCircle(sceneGroup,(xx/size)*c, 200 + ((yy/size) - 100)*r, 50)
 			objectGrid[r][c].anchorX = 1
 			tempColor = colors[math.random(1,numColor)]
 			objectGrid[r][c].color = tempColor
+			objectGrid[r][c].inGroup = false
 
 			if tempColor == "red" then
 				objectGrid[r][c]:setFillColor(1,0,0)
-			elseif tempColor == "blue" then
-				objectGrid[r][c]:setFillColor(0,1,0)
 			elseif tempColor == "green" then
+				objectGrid[r][c]:setFillColor(0,1,0)
+			elseif tempColor == "blue" then
 				objectGrid[r][c]:setFillColor(0,0,1)
 			elseif tempColor == "yellow" then
 				objectGrid[r][c]:setFillColor(0.9,0.9,0.2)
@@ -50,7 +51,7 @@ function scene:create( event )
 				objectGrid[r][c]:setFillColor(0.5,0.2,0.9)
 			elseif tempColor == "gray" then
 				objectGrid[r][c]:setFillColor(0.5,0.5,0.5)
-			else --temeColor == "white"
+			else --tempColor == "white"
 				objectGrid[r][c]:setFillColor(1,1,1)
 			end
 
@@ -58,6 +59,74 @@ function scene:create( event )
 			objectGrid[r][c].col = c
 		end
 	end
+
+	local function remove(curTile, groups)
+		local r = curTile.row
+		local c = curTile.col
+		local group
+		if curTile.group == nil then --If the curTile is not in a group
+			if c < size and objectGrid[r][c+1].color == curTile.color and objectGrid[r][c+1].group ~= nil then --If the tile to the right has the same color and is in a group
+				group = groups[objectGrid[r][c+1].group] 
+				table.insert(group, curTile) --Add current tile to the existing group
+				curTile.group = objectGrid[r][c+1].group --Save what group it is in
+				if r < size and objectGrid[r + 1][c].color == curTile.color then --If the tile below has the same color
+					table.insert(group, objectGrid[r+1][c]) --Add it to the group it just joined
+					objectGrid[r+1][c].group = curTile.group --Save what group it is in
+				end
+			else
+				table.insert(groups, {curTile.color, curTile})  --Create a group for the curTile
+				curTile.group = table.maxn(groups) --Save what group it is in
+				group = groups[curTile.group]
+				if r < size and objectGrid[r + 1][c].color == curTile.color then --If the tile below has the same color
+					table.insert(group, objectGrid[r+1][c])
+					objectGrid[r+1][c].group = curTile.group --Save what group it is in
+				end
+				if c < size and objectGrid[r][c+1].color == curTile.color then --If the tile to the right has the same color
+					table.insert(group, objectGrid[r][c+1])
+					objectGrid[r][c+1].group = curTile.group
+				end
+			end
+		else --If the curTile is in a group
+			group = groups[curTile.group]
+			if r < size and objectGrid[r + 1][c].color == curTile.color then --If the tile below has the same color
+				table.insert(group, objectGrid[r+1][c]) --Put into same group as current tile
+				objectGrid[r+1][c].group = curTile.group --Save what group it is in
+			end
+			if c < size and objectGrid[r][c+1].color == curTile.color then --If the tile to the right has the same color
+				if objectGrid[r][c+1].group ~= nil then --If the tile to the right is already in a group
+					local newGroup = groups[objectGrid[r][c+1].group] --Change current group to existing group
+					for i = table.maxn(group), 2, -1 do --Move all tiles to existing group
+						table.insert(newGroup, table.remove(group, i))
+					end
+				else --If the tile to the right is not already in a group
+					table.insert(group, objectGrid[r][c+1])
+					objectGrid[r][c+1].group = curTile.group
+				end
+			end
+		end
+		return groups
+	end
+
+	local function callRemove(event)
+		local groups = {}
+		for r=1,size do
+			for c=1,size do
+				groups = remove(objectGrid[r][c], groups)
+			end
+		end
+		for j, group in ipairs(groups) do
+			local length = table.maxn(group)
+			if length > 3 then
+				local message = "Color: "..group[1]
+				for k=2, length do
+					message = message.." Coord: ("..group[k].row..","..group[k].col..")"
+				end
+				print(message)
+			end
+		end
+	end
+
+	Runtime:addEventListener("tap",callRemove)
 
 end
 
