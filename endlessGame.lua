@@ -33,7 +33,11 @@ function scene:create( event )
 	for r=1,size do
 		objectGrid[r] = {}
 		for c=1,size do
+<<<<<<< HEAD
 			objectGrid[r][c] = display.newCircle(sceneGroup,(xx/size)*c, 200 + ((yy/size) - 100)*r, 50)
+=======
+			objectGrid[r][c] = display.newCircle(sceneGroup,(xx/size)*r, 200 + ((yy/size) - 100)*c, 75)
+>>>>>>> crummy
 			objectGrid[r][c].anchorX = 1
 			tempColor = colors[math.random(1,numColor)]
 			objectGrid[r][c].color = tempColor
@@ -55,11 +59,12 @@ function scene:create( event )
 				objectGrid[r][c]:setFillColor(1,1,1)
 			end
 
-			objectGrid[r][c].row = r
-			objectGrid[r][c].col = c
+			objectGrid[r][c].row = c
+			objectGrid[r][c].col = r
 		end
 	end
 
+<<<<<<< HEAD
 	local function remove(curTile, groups)
 		local r = curTile.row
 		local c = curTile.col
@@ -122,11 +127,169 @@ function scene:create( event )
 					message = message.." Coord: ("..group[k].row..","..group[k].col..")"
 				end
 				print(message)
+=======
+	local movedSoFar = 0
+
+	function move(event)
+		if(event.phase == "began") then
+			print("Tapped at:",event.x,event.y)
+			yPos = math.floor(event.x / 180) + 1
+			xPos = math.floor((event.y-348) / 208) + 1
+			if(xPos < 0 or yPos < 0 or xPos > size or yPos > size) then
+				return
+			end
+			directionMoved = nil
+			objectGrid[yPos][xPos].strokeWidth = 4
+			print("tapped:",xPos,yPos)
+			print("Row, Col: ",objectGrid[yPos][xPos].row,objectGrid[yPos][xPos].col)
+		elseif(event.phase == "moved") then
+			if(xPos < 0 or yPos < 0 or xPos > size or yPos > size) then
+				return
+			end
+			if(directionMoved == nil) then
+				xDif = math.abs(event.x - event.xStart)
+				yDif = math.abs(event.y - event.yStart)
+				if(xDif >= yDif) then
+					directionMoved = 'x'
+					markX = event.xStart
+				else
+					directionMoved = 'y'
+					markY = event.yStart
+				end
+				print("Direction moved:",directionMoved)
+			end
+
+			if(directionMoved == 'x') then
+				movedSoFar = movedSoFar + (event.x - markX)
+
+				--Note: 180 is the horizontal distance between 2 tiles
+				if(movedSoFar > 2000) then
+
+					tempArray = {}
+					for i=1,size do
+						objectGrid[i][xPos].x = objectGrid[i][xPos].x + 180
+						objectGrid[i][xPos].col = objectGrid[i][xPos].col + 1
+						if(objectGrid[i][xPos].x > 1080) then
+							objectGrid[i][xPos].x = objectGrid[i][xPos].x - 1080
+							objectGrid[i][xPos].col = 1
+						end
+						tempArray[i] = objectGrid[i][xPos]
+					end
+
+					--Relocate each object in the grid
+					for i=2,size do
+						objectGrid[i][xPos] = nil
+						objectGrid[i][xPos] = tempArray[i-1]
+					end
+					objectGrid[1][xPos] = tempArray[size]
+
+
+					markX = markX + 180
+					movedSoFar = 0
+
+				elseif(movedSoFar < -2000) then
+					
+					tempArray = {}
+					for i=1,size do
+						objectGrid[i][xPos].x = objectGrid[i][xPos].x - 180
+						objectGrid[i][xPos].col = objectGrid[i][xPos].col - 1
+						if(objectGrid[i][xPos].x < 100) then
+							objectGrid[i][xPos].x = objectGrid[i][xPos].x + 1080
+							objectGrid[i][xPos].col = 6
+						end
+						tempArray[i] = objectGrid[i][xPos]
+					end
+
+					--Relocate each object in the grid
+					for i=1,size-1 do
+						objectGrid[i][xPos] = nil
+						objectGrid[i][xPos] = tempArray[i+1]
+					end
+					objectGrid[size][xPos] = tempArray[1]
+
+					markX = markX - 180
+					movedSoFar = 0
+
+				end
+			else
+				movedSoFar = movedSoFar + (event.y - markY)
+
+				--Note: 220 is the vertical distance between
+				if(movedSoFar > 2000) then
+
+					tempArray = {}
+					for i=1,size do
+						objectGrid[yPos][i].y = objectGrid[yPos][i].y + 220
+						objectGrid[yPos][i].row = objectGrid[yPos][i].row + 1
+						if(objectGrid[yPos][i].y > 1520) then
+							objectGrid[yPos][i].y = 420
+							objectGrid[yPos][i].row = 1
+						end
+						tempArray[i] = objectGrid[yPos][i]
+					end
+
+					--Relocate each object in the grid
+					for i=2,size do
+						objectGrid[yPos][i] = nil
+						objectGrid[yPos][i] = tempArray[i-1]
+					end
+					objectGrid[yPos][1] = tempArray[size]
+
+
+					markY = markY + 220
+					movedSoFar = 0
+
+
+				elseif(movedSoFar < -2000) then
+					--[[for i=1,size do
+						objectGrid[yPos][i].y = objectGrid[yPos][i].y - 220
+					end
+					markY = markY - 220
+					movedSoFar = 0]]
+
+					tempArray = {}
+					for i=1,size do
+						objectGrid[yPos][i].y = objectGrid[yPos][i].y - 220
+						objectGrid[yPos][i].row = objectGrid[yPos][i].row - 1
+						if(objectGrid[yPos][i].y < 420) then
+							objectGrid[yPos][i].y = 1520
+							objectGrid[yPos][i].row = 6
+						end
+						tempArray[i] = objectGrid[yPos][i]
+					end
+
+					--Relocate each object in the grid
+					for i=1,size-1 do
+						objectGrid[yPos][i] = nil
+						objectGrid[yPos][i] = tempArray[i+1]
+					end
+					objectGrid[yPos][size] = tempArray[1]
+
+
+					markY = markY - 220
+					movedSoFar = 0
+
+				end
+			end
+
+		elseif(event.phase == "ended") then
+			if(xPos < 0 or yPos < 0 or xPos > size or yPos > size) then
+				return
+			end
+			for r=1,size do
+				for c=1,size do
+					objectGrid[r][c].strokeWidth = 0
+				end
+>>>>>>> crummy
 			end
 		end
 	end
 
+<<<<<<< HEAD
 	Runtime:addEventListener("tap",callRemove)
+=======
+	Runtime:addEventListener("touch",move)
+>>>>>>> crummy
 
 end
 
