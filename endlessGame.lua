@@ -1,7 +1,10 @@
 local composer = require( "composer" );
 local scene = composer.newScene();
 local myParams, sceneGroup;
-local size, colors
+local size, numColor, colors
+local colorsRemoved = {}
+local bountyIncomplete = false
+local turnsTaken = 0
 
 -- "scene:create()"
 function scene:create( event )
@@ -16,9 +19,13 @@ function scene:create( event )
 	titleTxt = display.newText(sceneGroup, "Endless mode!", xx/2, 100)
 	titleTxt.size = 75
 
-	scoreTitle = display.newText(sceneGroup, "Score:", xx/2 - 50, 175)
+	scoreTitle = display.newText(sceneGroup, "Score:", xx/2 - 75, 175)
 
-	scoreVal = display.newText(sceneGroup, "0", xx/2 + 50, 175)
+	scoreVal = display.newText(sceneGroup, "0", xx/2 + 75, 175)
+
+	bountyText = display.newText(sceneGroup, "PLACEHOLDERTXT",xx/2, 230)
+	bountyText:setFillColor(1,0,0)
+	bountyText.isVisible = false
 
 	objectGrid = {}
 
@@ -33,48 +40,270 @@ function scene:create( event )
 	for r=1,size do
 		objectGrid[r] = {}
 		for c=1,size do
-			objectGrid[r][c] = display.newCircle(sceneGroup,(xx/size)*r, 200 + ((yy/size) - 100)*c, 75)
+			objectGrid[r][c] = display.newCircle(sceneGroup,(xx/size)*c, 200 + ((yy/size) - 100)*r, xx/size/2)
+
 			objectGrid[r][c].anchorX = 1
 			tempColor = colors[math.random(1,numColor)]
 			objectGrid[r][c].color = tempColor
 
 			if tempColor == "red" then
 				objectGrid[r][c]:setFillColor(1,0,0)
-			elseif tempColor == "blue" then
-				objectGrid[r][c]:setFillColor(0,1,0)
+				objectGrid[r][c].rgb = {1,0,0}
 			elseif tempColor == "green" then
+				objectGrid[r][c]:setFillColor(0,1,0)
+				objectGrid[r][c].rgb = {0,1,0}
+			elseif tempColor == "blue" then
 				objectGrid[r][c]:setFillColor(0,0,1)
+				objectGrid[r][c].rgb = {0,0,1}
 			elseif tempColor == "yellow" then
 				objectGrid[r][c]:setFillColor(0.9,0.9,0.2)
+				objectGrid[r][c].rgb = {0.9,0.9,0.2}
 			elseif tempColor == "purple" then
 				objectGrid[r][c]:setFillColor(0.5,0.2,0.9)
+				objectGrid[r][c].rgb = {0.5,0.2,0.9}
 			elseif tempColor == "gray" then
 				objectGrid[r][c]:setFillColor(0.5,0.5,0.5)
-			else --temeColor == "white"
+				objectGrid[r][c].rgb = {0.5,0.5,0.5}
+			else --tempColor == "white"
 				objectGrid[r][c]:setFillColor(1,1,1)
+				objectGrid[r][c].rgb = {1,1,1}
 			end
 
-			objectGrid[r][c].row = c
-			objectGrid[r][c].col = r
+			objectGrid[r][c].row = r
+			objectGrid[r][c].col = c
 		end
 	end
 
+	local function findGroups(curTile, groups)
+		local r = curTile.row
+		local c = curTile.col
+		local group
+		if curTile.group == nil then --If the curTile is not in a group
+			if c < size and objectGrid[r][c+1].color == curTile.color and objectGrid[r][c+1].group ~= nil then --If the tile to the right has the same color and is in a group
+				group = groups[objectGrid[r][c+1].group] 
+				table.insert(group, curTile) --Add current tile to the existing group
+				curTile.group = objectGrid[r][c+1].group --Save what group it is in
+				if r < size and objectGrid[r + 1][c].color == curTile.color then --If the tile below has the same color
+					table.insert(group, objectGrid[r+1][c]) --Add it to the group it just joined
+					objectGrid[r+1][c].group = curTile.group --Save what group it is in
+				end
+			else
+				table.insert(groups, {curTile.color, curTile})  --Create a group for the curTile
+				curTile.group = table.maxn(groups) --Save what group it is in
+				group = groups[curTile.group]
+				if r < size and objectGrid[r + 1][c].color == curTile.color then --If the tile below has the same color
+					table.insert(group, objectGrid[r+1][c])
+					objectGrid[r+1][c].group = curTile.group --Save what group it is in
+				end
+				if c < size and objectGrid[r][c+1].color == curTile.color then --If the tile to the right has the same color
+					table.insert(group, objectGrid[r][c+1])
+					objectGrid[r][c+1].group = curTile.group
+				end
+			end
+		else --If the curTile is in a group
+			group = groups[curTile.group]
+			if r < size and objectGrid[r + 1][c].color == curTile.color then --If the tile below has the same color
+				table.insert(group, objectGrid[r+1][c]) --Put into same group as current tile
+				objectGrid[r+1][c].group = curTile.group --Save what group it is in
+			end
+			if c < size and objectGrid[r][c+1].color == curTile.color then --If the tile to the right has the same color
+				if objectGrid[r][c+1].group ~= nil then --If the tile to the right is already in a group
+					local newGroup = groups[objectGrid[r][c+1].group] --Change current group to existing group
+					for i = table.maxn(group), 2, -1 do --Move all tiles to existing group
+						table.insert(newGroup, table.remove(group, i))
+					end
+				else --If the tile to the right is not already in a group
+					table.insert(group, objectGrid[r][c+1])
+					objectGrid[r][c+1].group = curTile.group
+				end
+			end
+		end
+		return groups
+	end
+
+	local removed = false --Used to check if any groups were removed, if they have been the remove process should be ran
+						  --again to get rid of any new groups that may have been spawned in
+	local startRemove --Forward declared to be used in removeGroups to restart the removal process
+	local playable = true --Disables the touch event while tiles are being removed/spawned
+
+	local function removeGroups()
+		local numRemovedFromCol = {0,0,0,0,0,0,0,0,0,0} --Tracks how many tiles are removed from each col
+		for r=1,size do
+			for c=1,size do
+				local curTile = objectGrid[r][c]
+				if curTile.group ~= nil then  --These are the tiles that will be removed
+					numRemovedFromCol[curTile.col] = numRemovedFromCol[curTile.col] + 1
+				end
+			end
+		end
+
+		for c=1,size do
+			local moveDownRows = {0,0,0,0,0,0,0,0,0,0} --Keeps track how many rows each tile should move down
+			for r=size, 2, -1 do  -- Go through each column starting at the bottom and skip the top row
+				local curTile = objectGrid[r][c]
+				if curTile.group ~= nil then  --These tiles will be black and should get swapped with a colorful tile above it
+					for row=r-1, 1, -1 do
+						if objectGrid[row][c].group == nil then
+							moveDownRows[row] = moveDownRows[row] + 1
+						end
+					end
+				end
+			end
+			for i=size, 1, -1 do
+				local delta = moveDownRows[i]
+				local curTile = objectGrid[i][c]
+				local shiftTile = objectGrid[i + delta][c]
+				shiftTile:setFillColor(curTile.rgb[1], curTile.rgb[2], curTile.rgb[3])
+				shiftTile.color = curTile.color
+				shiftTile.rgb = curTile.rgb
+			end
+		end
+
+		for c=1,size do
+			for r=1,numRemovedFromCol[c] do
+				tempColor = colors[math.random(1,numColor)]
+				objectGrid[r][c].color = tempColor
+
+				if tempColor == "red" then
+					objectGrid[r][c]:setFillColor(1,0,0)
+					objectGrid[r][c].rgb = {1,0,0}
+				elseif tempColor == "green" then
+					objectGrid[r][c]:setFillColor(0,1,0)
+					objectGrid[r][c].rgb = {0,1,0}
+				elseif tempColor == "blue" then
+					objectGrid[r][c]:setFillColor(0,0,1)
+					objectGrid[r][c].rgb = {0,0,1}
+				elseif tempColor == "yellow" then
+					objectGrid[r][c]:setFillColor(0.9,0.9,0.2)
+					objectGrid[r][c].rgb = {0.9,0.9,0.2}
+				elseif tempColor == "purple" then
+					objectGrid[r][c]:setFillColor(0.5,0.2,0.9)
+					objectGrid[r][c].rgb = {0.5,0.2,0.9}
+				elseif tempColor == "gray" then
+					objectGrid[r][c]:setFillColor(0.5,0.5,0.5)
+					objectGrid[r][c].rgb = {0.5,0.5,0.5}
+				else --tempColor == "white"
+					objectGrid[r][c]:setFillColor(1,1,1)
+					objectGrid[r][c].rgb = {1,1,1}
+				end
+			end
+		end
+		if removed then
+			timer.performWithDelay(500, startRemove)
+			return;
+		end
+		playable = true
+	end
+
+	local function turnBlack() --Turns the grouped tiles black before they get replaced by new tiles
+		for r=1,size do
+			for c=1,size do
+				local curTile = objectGrid[r][c]
+				if curTile.group ~= nil then
+					curTile:setFillColor(0,0,0)
+					curTile.rgb = {0,0,0}
+					curTile.color = "black"
+						--Update the score, add 10 points per tile removed
+					scoreVal.text = scoreVal.text + 10
+				end
+			end
+		end
+		removeGroups()
+	end
+
+	local function resetColors() --Changes tiles back to their original color from black
+		for r=1,size do
+			for c=1,size do
+				local curTile = objectGrid[r][c]
+				if curTile.group ~= nil then
+					curTile:setFillColor(curTile.rgb[1], curTile.rgb[2], curTile.rgb[3])
+				end
+			end
+		end
+		timer.performWithDelay(500, turnBlack)
+	end
+
+	startRemove = function()
+	    removed = false
+		local groups = {}
+		for r=1,size do
+			for c=1,size do
+				objectGrid[r][c].group = nil
+			end
+		end
+		for r=1,size do
+			for c=1,size do
+				groups = findGroups(objectGrid[r][c], groups)
+			end
+		end
+		for j, group in ipairs(groups) do
+			local length = table.maxn(group)
+			if length > 3 then  --If the group has at least 3 tiles (First element in group is the color)
+				removed = true
+				playable = false
+				if(bountyIncomplete) then
+					table.insert(colorsRemoved,group[1])
+					for i=1,table.maxn(colorsRemoved) do
+						print(colorsRemoved[i])
+					end
+				end
+				for k=2, length do
+					group[k]:setFillColor(0,0,0) --Change color to black
+				end
+			else
+				for k=2, length do
+					group[k].group = nil
+				end
+			end
+		end
+		if removed then --If no groups formed the removal process is done here
+			timer.performWithDelay(500, resetColors) --Change color back to original and remove
+		else
+			if(bountyIncomplete) then
+				didYouWin = false
+				for i=1,table.maxn(colorsRemoved) do
+					if(colorsRemoved[i] == bountyColor) then
+						didYouWin = true
+					end
+				end
+				colorsRemoved = {}
+				if(didYouWin) then
+					turnsTaken = 0
+					bountyIncomplete = false
+					bountyText.isVisible = false
+				else
+					print("You lose!")
+					for r=1,size do
+						for c = 1,size do
+							objectGrid[r][c].isVisible = false
+						end
+					end
+					scoreTitle.y = yy / 2
+					scoreVal.y = yy / 2
+					bountyText.isVisible = false
+
+					return
+				end
+			end
+			playable = true --Since the removal process is done the board can be unlocked
+		end
+	end
+
+	timer.performWithDelay(1000, startRemove) --Need to call once after spawning the initial tiles to check for groups
+
 	local movedSoFar = 0
 
-	function move(event)
-		if(event.phase == "began") then
-			print("Tapped at:",event.x,event.y)
-			yPos = math.floor(event.x / 180) + 1
-			xPos = math.floor((event.y-348) / 208) + 1
-			if(xPos < 0 or yPos < 0 or xPos > size or yPos > size) then
+	local function move(event)
+		if(event.phase == "began" and playable) then
+			col = math.floor(event.x / 180) + 1
+			row = math.floor((event.y-348) / 208) + 1
+			if(row <= 0 or col <= 0 or row > size or col > size) then
 				return
 			end
 			directionMoved = nil
-			objectGrid[yPos][xPos].strokeWidth = 4
-			print("tapped:",xPos,yPos)
-			print("Row, Col: ",objectGrid[yPos][xPos].row,objectGrid[yPos][xPos].col)
-		elseif(event.phase == "moved") then
-			if(xPos < 0 or yPos < 0 or xPos > size or yPos > size) then
+			objectGrid[row][col].strokeWidth = 4
+		elseif(event.phase == "moved" and playable) then
+			if(row <= 0 or col <= 0 or row > size or col > size) then
 				return
 			end
 			if(directionMoved == nil) then
@@ -87,114 +316,105 @@ function scene:create( event )
 					directionMoved = 'y'
 					markY = event.yStart
 				end
-				print("Direction moved:",directionMoved)
 			end
 
 			if(directionMoved == 'x') then
-				movedSoFar = movedSoFar + (event.x - markX)
-
+				movedSoFar = (event.x - markX)
 				--Note: 180 is the horizontal distance between 2 tiles
-				if(movedSoFar > 2000) then
+				if(movedSoFar > 180) then
 
 					tempArray = {}
 					for i=1,size do
-						objectGrid[i][xPos].x = objectGrid[i][xPos].x + 180
-						objectGrid[i][xPos].col = objectGrid[i][xPos].col + 1
-						if(objectGrid[i][xPos].x > 1080) then
-							objectGrid[i][xPos].x = objectGrid[i][xPos].x - 1080
-							objectGrid[i][xPos].col = 1
+						objectGrid[row][i].x = objectGrid[row][i].x + 180
+						objectGrid[row][i].col = objectGrid[row][i].col + 1
+						if(objectGrid[row][i].x > 1080) then
+							objectGrid[row][i].x = objectGrid[row][i].x - 1080
+							objectGrid[row][i].col = 1
 						end
-						tempArray[i] = objectGrid[i][xPos]
+						tempArray[i] = objectGrid[row][i]
 					end
 
 					--Relocate each object in the grid
 					for i=2,size do
-						objectGrid[i][xPos] = nil
-						objectGrid[i][xPos] = tempArray[i-1]
+						objectGrid[row][i] = nil
+						objectGrid[row][i] = tempArray[i-1]
 					end
-					objectGrid[1][xPos] = tempArray[size]
+					objectGrid[row][1] = tempArray[size]
 
 
 					markX = markX + 180
 					movedSoFar = 0
 
-				elseif(movedSoFar < -2000) then
+				elseif(movedSoFar < -180) then
 					
 					tempArray = {}
 					for i=1,size do
-						objectGrid[i][xPos].x = objectGrid[i][xPos].x - 180
-						objectGrid[i][xPos].col = objectGrid[i][xPos].col - 1
-						if(objectGrid[i][xPos].x < 100) then
-							objectGrid[i][xPos].x = objectGrid[i][xPos].x + 1080
-							objectGrid[i][xPos].col = 6
+						objectGrid[row][i].x = objectGrid[row][i].x - 180
+						objectGrid[row][i].col = objectGrid[row][i].col - 1
+						if(objectGrid[row][i].x < 100) then
+							objectGrid[row][i].x = objectGrid[row][i].x + 1080
+							objectGrid[row][i].col = 6
 						end
-						tempArray[i] = objectGrid[i][xPos]
+						tempArray[i] = objectGrid[row][i]
 					end
 
 					--Relocate each object in the grid
 					for i=1,size-1 do
-						objectGrid[i][xPos] = nil
-						objectGrid[i][xPos] = tempArray[i+1]
+						objectGrid[row][i] = nil
+						objectGrid[row][i] = tempArray[i+1]
 					end
-					objectGrid[size][xPos] = tempArray[1]
+					objectGrid[row][size] = tempArray[1]
 
 					markX = markX - 180
 					movedSoFar = 0
 
 				end
 			else
-				movedSoFar = movedSoFar + (event.y - markY)
+				movedSoFar = (event.y - markY)
 
 				--Note: 220 is the vertical distance between
-				if(movedSoFar > 2000) then
+				if(movedSoFar > 220) then
 
 					tempArray = {}
 					for i=1,size do
-						objectGrid[yPos][i].y = objectGrid[yPos][i].y + 220
-						objectGrid[yPos][i].row = objectGrid[yPos][i].row + 1
-						if(objectGrid[yPos][i].y > 1520) then
-							objectGrid[yPos][i].y = 420
-							objectGrid[yPos][i].row = 1
+						objectGrid[i][col].y = objectGrid[i][col].y + 220
+						objectGrid[i][col].row = objectGrid[i][col].row + 1
+						if(objectGrid[i][col].y > 1520) then
+							objectGrid[i][col].y = 420
+							objectGrid[i][col].row = 1
 						end
-						tempArray[i] = objectGrid[yPos][i]
+						tempArray[i] = objectGrid[i][col]
 					end
 
 					--Relocate each object in the grid
 					for i=2,size do
-						objectGrid[yPos][i] = nil
-						objectGrid[yPos][i] = tempArray[i-1]
+						objectGrid[i][col] = nil
+						objectGrid[i][col] = tempArray[i-1]
 					end
-					objectGrid[yPos][1] = tempArray[size]
+					objectGrid[1][col] = tempArray[size]
 
 
 					markY = markY + 220
 					movedSoFar = 0
 
-
-				elseif(movedSoFar < -2000) then
-					--[[for i=1,size do
-						objectGrid[yPos][i].y = objectGrid[yPos][i].y - 220
-					end
-					markY = markY - 220
-					movedSoFar = 0]]
-
+				elseif(movedSoFar < -220) then
 					tempArray = {}
 					for i=1,size do
-						objectGrid[yPos][i].y = objectGrid[yPos][i].y - 220
-						objectGrid[yPos][i].row = objectGrid[yPos][i].row - 1
-						if(objectGrid[yPos][i].y < 420) then
-							objectGrid[yPos][i].y = 1520
-							objectGrid[yPos][i].row = 6
+						objectGrid[i][col].y = objectGrid[i][col].y - 220
+						objectGrid[i][col].row = objectGrid[i][col].row - 1
+						if(objectGrid[i][col].y < 420) then
+							objectGrid[i][col].y = 1520
+							objectGrid[i][col].row = 6
 						end
-						tempArray[i] = objectGrid[yPos][i]
+						tempArray[i] = objectGrid[i][col]
 					end
 
 					--Relocate each object in the grid
 					for i=1,size-1 do
-						objectGrid[yPos][i] = nil
-						objectGrid[yPos][i] = tempArray[i+1]
+						objectGrid[i][col] = nil
+						objectGrid[i][col] = tempArray[i+1]
 					end
-					objectGrid[yPos][size] = tempArray[1]
+					objectGrid[size][col] = tempArray[1]
 
 
 					markY = markY - 220
@@ -203,14 +423,22 @@ function scene:create( event )
 				end
 			end
 
-		elseif(event.phase == "ended") then
-			if(xPos < 0 or yPos < 0 or xPos > size or yPos > size) then
+		elseif(event.phase == "ended" and playable) then
+			if(row <= 0 or col <= 0 or row > size or col > size) then
 				return
 			end
 			for r=1,size do
 				for c=1,size do
 					objectGrid[r][c].strokeWidth = 0
 				end
+			end
+			turnsTaken = turnsTaken + 1
+			startRemove()
+			if(turnsTaken == 5) then
+				bountyIncomplete = true
+				bountyColor = colors[math.random(1,numColor)]
+				bountyText.text = "You need to clear a "..bountyColor..", or you lose!!!"
+				bountyText.isVisible = true
 			end
 		end
 	end
@@ -258,31 +486,3 @@ scene:addEventListener( "show", scene );
 scene:addEventListener( "hide", scene );
 scene:addEventListener( "destroy", scene );
 return scene;
-
---move function:
---[[
-	local function move(event)
-		if event.phase == "began" then
-			event.target.markX = event.target.x
-			event.target.markY = event.target.y
-		elseif event.phase == "moved" then
-				--The first time the app ran, it was throwing an error about 
-						--markX, later times it ran fine, but these nil statements fixed it
-			if event.target.markX == nil then
-				event.target.markX = display.contentWidth / 2
-			end
-			if event.target.markY == nil then
-				event.target.markY = display.contentHeight / 2
-			end
-			local x = (event.x - event.xStart) + event.target.markX
-			local y = (event.y - event.yStart) + event.target.markY
-			xx = display.contentWidth
-			yy = display.contentHeight
-			if not (x<100 or y>(yy-100) or y<100 or x>(xx-100)) then
-				event.target.x = x
-				event.target.y = y
-			end
-		end
-	end
-	obj:addEventListener("touch", move)
-]]
