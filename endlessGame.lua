@@ -16,6 +16,12 @@ function scene:create( event )
 	xx = display.contentWidth
 	yy = display.contentHeight
 
+	yStart = 510 - (30*size)
+	yEnd = (2200-(100*size))
+
+	xDistance = 1080 / size
+	yDistance = (yEnd - yStart) / size
+
 	titleTxt = display.newText(sceneGroup, "Endless mode!", xx/2, 100)
 	titleTxt.size = 75
 
@@ -294,9 +300,10 @@ function scene:create( event )
 	local movedSoFar = 0
 
 	local function move(event)
+		print("x,y:",event.x,event.y)
 		if(event.phase == "began" and playable) then
-			col = math.floor(event.x / 180) + 1
-			row = math.floor((event.y-348) / 208) + 1
+			col = math.floor(event.x / xDistance) + 1
+			row = math.floor((event.y-yStart) / yDistance) + 1
 			if(row <= 0 or col <= 0 or row > size or col > size) then
 				return
 			end
@@ -321,11 +328,11 @@ function scene:create( event )
 			if(directionMoved == 'x') then
 				movedSoFar = (event.x - markX)
 				--Note: 180 is the horizontal distance between 2 tiles
-				if(movedSoFar > 180) then
+				if(movedSoFar > xDistance) then
 
 					tempArray = {}
 					for i=1,size do
-						objectGrid[row][i].x = objectGrid[row][i].x + 180
+						objectGrid[row][i].x = objectGrid[row][i].x + xDistance
 						objectGrid[row][i].col = objectGrid[row][i].col + 1
 						if(objectGrid[row][i].x > 1080) then
 							objectGrid[row][i].x = objectGrid[row][i].x - 1080
@@ -342,14 +349,14 @@ function scene:create( event )
 					objectGrid[row][1] = tempArray[size]
 
 
-					markX = markX + 180
+					markX = markX + xDistance
 					movedSoFar = 0
 
-				elseif(movedSoFar < -180) then
+				elseif(movedSoFar < -xDistance) then
 					
 					tempArray = {}
 					for i=1,size do
-						objectGrid[row][i].x = objectGrid[row][i].x - 180
+						objectGrid[row][i].x = objectGrid[row][i].x - xDistance
 						objectGrid[row][i].col = objectGrid[row][i].col - 1
 						if(objectGrid[row][i].x < 100) then
 							objectGrid[row][i].x = objectGrid[row][i].x + 1080
@@ -365,22 +372,24 @@ function scene:create( event )
 					end
 					objectGrid[row][size] = tempArray[1]
 
-					markX = markX - 180
+					markX = markX - xDistance
 					movedSoFar = 0
 
 				end
 			else
 				movedSoFar = (event.y - markY)
 
-				--Note: 220 is the vertical distance between
-				if(movedSoFar > 220) then
+				--Note: 220 is the vertical distance between tiles
+				if(movedSoFar > yDistance) then
 
 					tempArray = {}
 					for i=1,size do
-						objectGrid[i][col].y = objectGrid[i][col].y + 220
+						objectGrid[i][col].y = objectGrid[i][col].y + yDistance
+						print("adding",yDistance)
 						objectGrid[i][col].row = objectGrid[i][col].row + 1
-						if(objectGrid[i][col].y > 1520) then
-							objectGrid[i][col].y = 420
+						if(objectGrid[i][col].y > yEnd) then
+							objectGrid[i][col].y = yStart + xx/size/2
+							--objectGrid[i][col].y = 375
 							objectGrid[i][col].row = 1
 						end
 						tempArray[i] = objectGrid[i][col]
@@ -394,17 +403,17 @@ function scene:create( event )
 					objectGrid[1][col] = tempArray[size]
 
 
-					markY = markY + 220
+					markY = markY + yDistance
 					movedSoFar = 0
 
-				elseif(movedSoFar < -220) then
+				elseif(movedSoFar < -yDistance) then
 					tempArray = {}
 					for i=1,size do
-						objectGrid[i][col].y = objectGrid[i][col].y - 220
+						objectGrid[i][col].y = objectGrid[i][col].y - yDistance
 						objectGrid[i][col].row = objectGrid[i][col].row - 1
-						if(objectGrid[i][col].y < 420) then
-							objectGrid[i][col].y = 1520
-							objectGrid[i][col].row = 6
+						if(objectGrid[i][col].y < yStart) then
+							objectGrid[i][col].y = yEnd - xx/size/2
+							objectGrid[i][col].row = size
 						end
 						tempArray[i] = objectGrid[i][col]
 					end
@@ -417,7 +426,7 @@ function scene:create( event )
 					objectGrid[size][col] = tempArray[1]
 
 
-					markY = markY - 220
+					markY = markY - yDistance
 					movedSoFar = 0
 
 				end
