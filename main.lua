@@ -1,8 +1,17 @@
 local composer = require( "composer" );
 
-myParams = {}
-myParams.size = 6
-myParams.colors = 5
-composer.gotoScene("endlessGame", {effect="fade",time=500, params=myParams});
+local soundTable = {
+	mainBGM = audio.loadSound( "blobbySamba.mp3" ),
+}
 
---composer.gotoScene("mainMenu", {effect="fade",time=500});
+local function playBGM()
+	audio.play( soundTable["mainBGM"],{channel=32, onComplete=playBGM});
+	--Background music is Blobby Samba by the amazing and generous Kevin Macleod	
+end
+
+playBGM()
+audio.setVolume(0.15, {channel=32})
+
+
+
+composer.gotoScene("mainMenu", {effect="fade",time=500});

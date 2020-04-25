@@ -6,6 +6,12 @@ local colorsRemoved = {}
 local bountyIncomplete = false
 local turnsTaken = 0
 
+local soundTable = {
+	bell = audio.loadSound("bell.mp3"),
+	oops = audio.loadSound("oops.mp3"),
+}
+
+
 -- "scene:create()"
 function scene:create( event )
 	sceneGroup = self.view; -- The display group
@@ -211,6 +217,9 @@ function scene:create( event )
 					curTile.color = "black"
 						--Update the score, add 10 points per tile removed
 					scoreVal.text = scoreVal.text + 10
+
+					audio.play(soundTable["bell"],{channel = 1})
+
 				end
 			end
 		end
@@ -249,9 +258,6 @@ function scene:create( event )
 				playable = false
 				if(bountyIncomplete) then
 					table.insert(colorsRemoved,group[1])
-					for i=1,table.maxn(colorsRemoved) do
-						print(colorsRemoved[i])
-					end
 				end
 				for k=2, length do
 					group[k]:setFillColor(0,0,0) --Change color to black
@@ -278,15 +284,50 @@ function scene:create( event )
 					bountyIncomplete = false
 					bountyText.isVisible = false
 				else
-					print("You lose!")
+					audio.pause(32)
+					audio.play(soundTable["oops"], {channel = 2})
+
 					for r=1,size do
 						for c = 1,size do
 							objectGrid[r][c].isVisible = false
 						end
 					end
-					scoreTitle.y = yy / 2
-					scoreVal.y = yy / 2
+					
 					bountyText.isVisible = false
+
+					local finalScore = scoreVal.text;
+
+					hsFileToCheck = "highScore"..size..".txt"
+
+					local path = system.pathForFile( hsFileToCheck, system.DocumentsDirectory );
+					local file = io.open( path, "r" );
+					local highScore = file:read( "*a" ); --everything
+					io.close( file );
+					file = nil;
+					
+					if(finalScore > highScore) then
+
+						txt = display.newText(sceneGroup, "New high score for this size!", xx/2, (yy / 2) - 75)
+
+						scoreTitle.y = yy / 2
+						scoreVal.y = yy / 2
+
+						local path = system.pathForFile( hsFileToCheck, system.DocumentsDirectory );
+						local file = io.open( path, "w" );
+						file:write( finalScore );
+						io.close( file );
+						file = nil;
+
+					else
+
+						txt = display.newText(sceneGroup, "Your score this time:", xx/2, (yy / 2) - 50)
+
+						scoreTitle.y = yy / 2
+						scoreVal.y = yy / 2
+
+						txt2 = display.newText(sceneGroup, "Your high score:", xx/2 - 75, (yy / 2) + 150)
+						txt3 = display.newText(sceneGroup, highScore, xx/2 + 200, (yy / 2) + 150)
+					end
 
 					return
 				end
@@ -300,7 +341,6 @@ function scene:create( event )
 	local movedSoFar = 0
 
 	local function move(event)
-		print("x,y:",event.x,event.y)
 		if(event.phase == "began" and playable) then
 			col = math.floor(event.x / xDistance) + 1
 			row = math.floor((event.y-yStart) / yDistance) + 1
@@ -385,7 +425,6 @@ function scene:create( event )
 					tempArray = {}
 					for i=1,size do
 						objectGrid[i][col].y = objectGrid[i][col].y + yDistance
-						print("adding",yDistance)
 						objectGrid[i][col].row = objectGrid[i][col].row + 1
 						if(objectGrid[i][col].y > yEnd) then
 							objectGrid[i][col].y = yStart + xx/size/2
